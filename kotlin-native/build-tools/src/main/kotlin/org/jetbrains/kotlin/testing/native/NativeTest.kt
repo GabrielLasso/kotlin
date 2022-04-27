@@ -138,8 +138,14 @@ abstract class CompileNativeTest @Inject constructor(
     @OutputFile
     var compilerOutputFile: File = project.buildDir.resolve("bin/test/${target.name}/$baseName.o")
 
+    private val executableExtension: String = when (target) {
+        is KonanTarget.MINGW_X64 -> ".exe"
+        is KonanTarget.MINGW_X86 -> ".exe"
+        else -> ""
+    }
+
     @OutputFile
-    var outputFile: File = project.buildDir.resolve("bin/test/${target.name}/$baseName")
+    var outputFile: File = project.buildDir.resolve("bin/test/${target.name}/$baseName$executableExtension")
 
     @Input
     val clangArgs = mutableListOf<String>()
