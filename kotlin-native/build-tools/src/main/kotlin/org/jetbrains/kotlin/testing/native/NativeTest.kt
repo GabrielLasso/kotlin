@@ -28,7 +28,7 @@ interface CompileNativeTestParameters : WorkParameters {
     var inputFiles: List<File>
     var llvmLinkOutputFile: File
     var compilerOutputFile: File
-    var target: KonanTarget
+    var targetName: String
     var compilerArgs: List<String>
     var linkCommands: List<List<String>>
 
@@ -79,6 +79,7 @@ abstract class CompileNativeTestJob : WorkAction<CompileNativeTestParameters> {
         with(parameters) {
             val platformManager = PlatformManager(buildDistribution(konanHome.absolutePath), experimentalDistribution)
             val execClang = ExecClang.create(objects, platformManager, llvmDir)
+            val target = platformManager.targetByName(targetName)
 
             if (target.family.isAppleFamily) {
                 execClang.execToolchainClang(target) {
@@ -188,7 +189,7 @@ abstract class CompileNativeTest @Inject constructor(
             it.inputFiles = inputFiles.map { it }
             it.llvmLinkOutputFile = llvmLinkOutputFile
             it.compilerOutputFile = compilerOutputFile
-            it.target = target
+            it.targetName = target.name
             it.compilerArgs = clangArgs + sanitizerFlags
             it.linkCommands = linkCommands
 
