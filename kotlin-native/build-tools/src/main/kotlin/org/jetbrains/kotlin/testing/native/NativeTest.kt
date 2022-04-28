@@ -228,6 +228,9 @@ open class RunNativeTest @Inject constructor(
     @Input @Optional
     var sanitizer: SanitizerKind? = null
 
+    @InputFile
+    var tsanSuppressionsFile = project.file("tsan_suppressions.txt")
+
     @TaskAction
     fun run() {
         workingDir.mkdirs()
@@ -242,9 +245,7 @@ open class RunNativeTest @Inject constructor(
             args("--gtest_output=xml:${outputFile.absolutePath}")
             when (sanitizer) {
                 SanitizerKind.THREAD -> {
-                    val file = project.file("tsan_suppressions.txt")
-                    inputs.file(file)
-                    environment("TSAN_OPTIONS", "suppressions=${file.absolutePath}")
+                    environment("TSAN_OPTIONS", "suppressions=${tsanSuppressionsFile.absolutePath}")
                 }
                 else -> {} // no action required
             }
