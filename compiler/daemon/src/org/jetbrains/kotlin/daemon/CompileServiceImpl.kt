@@ -22,6 +22,7 @@ import com.intellij.openapi.vfs.impl.ZipHandler
 import com.intellij.openapi.vfs.impl.jar.CoreJarFileSystem
 import org.jetbrains.kotlin.build.DEFAULT_KOTLIN_SOURCE_FILES_EXTENSIONS
 import org.jetbrains.kotlin.build.report.RemoteBuildReporter
+import org.jetbrains.kotlin.build.report.metrics.BuildPerformanceMetric
 import org.jetbrains.kotlin.cli.common.CLICompiler
 import org.jetbrains.kotlin.cli.common.CompilerSystemProperties
 import org.jetbrains.kotlin.cli.common.ExitCode
@@ -295,7 +296,7 @@ abstract class CompileServiceImplBase(
         createMessageCollector: (ServicesFacadeT, CompilationOptions) -> MessageCollector,
         createReporter: (ServicesFacadeT, CompilationOptions) -> DaemonMessageReporter,
         createServices: (JpsServicesFacadeT, EventManager, Profiler) -> Services,
-        getICReporter: (ServicesFacadeT, CompilationResultsT?, IncrementalCompilationOptions) -> RemoteBuildReporter
+        getICReporter: (ServicesFacadeT, CompilationResultsT?, CompilationOptions) -> RemoteBuildReporter
     ) = kotlin.run {
         val messageCollector = createMessageCollector(servicesFacade, compilationOptions)
         val daemonReporter = createReporter(servicesFacade, compilationOptions)
@@ -329,7 +330,28 @@ abstract class CompileServiceImplBase(
             }
             CompilerMode.NON_INCREMENTAL_COMPILER -> {
                 doCompile(sessionId, daemonReporter, tracer = null) { _, _ ->
+                    val reporter = getICReporter(
+                        servicesFacade,
+                        compilationResults!!,
+                        compilationOptions
+                    )
+
                     val exitCode = compiler.exec(messageCollector, Services.EMPTY, k2PlatformArgs)
+
+                    (k2PlatformArgs as? K2JSCompilerArguments)?.let {
+                        val outputFile = File(it.outputFile).parentFile
+
+                        if (outputFile.isDirectory()) {
+                            outputFile.walkTopDown()
+                                .filter { it.isFile }
+                                .filter { it.extension == "js" }
+                                .map { it.length() }
+                                .sum()
+                                .let {
+                                    reporter.addMetric(BuildPerformanceMetric.COMPILE_OUTPUT_SIZE, it)
+                                }
+                        }
+                    }
 
                     val perfString = compiler.defaultPerformanceManager.renderCompilerPerformance()
                     compilationResults?.also {
@@ -338,11 +360,14 @@ abstract class CompileServiceImplBase(
                             arrayListOf(perfString)
                         )
                     }
+                    reporter.flush()
 
                     exitCode
                 }
             }
             CompilerMode.INCREMENTAL_COMPILER -> {
+                messageCollector.report(CompilerMessageSeverity.WARNING, "INCREMENTAL")
+
                 val gradleIncrementalArgs = compilationOptions as IncrementalCompilationOptions
                 val gradleIncrementalServicesFacade = servicesFacade
 
